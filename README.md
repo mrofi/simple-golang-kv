@@ -42,12 +42,15 @@ docker run -p 8080:8080 \
 - `ETCD_CERT_FILE` — client certificate file (optional)
 - `ETCD_KEY_FILE` — client key file (optional)
 - `PORT` — HTTP port (default: `8080`)
+- `BASE_KEY_PREFIX` — base key prefix (default: `kvstore`)
 - `DEFAULT_NAMESPACE` — default namespace (default: `default`)
 - `DEFAULT_APPNAME` — default app name (default: `default`)
+- `DEFAULT_TTL_SECONDS` — default ttl in seconds (default: `0` means no expiration)
 - `MAX_NAMESPACE_LEN` — max namespace length (default: `25`)
 - `MAX_APPNAME_LEN` — max app name length (default: `25`)
 - `MAX_KEY_LEN` — max key length (default: `100`)
 - `MAX_VALUE_SIZE` — max value size in bytes (default: `1048576` for 1MB)
+- `MAX_TTL_SECONDS` — max ttl in seconds (default: `31536000` for 1 year)
 
 ### API
 

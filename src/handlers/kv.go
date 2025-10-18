@@ -12,12 +12,15 @@ import (
 )
 
 var (
+	baseKeyPrefix    = getEnv("BASE_KEY_PREFIX", "kvstore")
 	defaultNamespace = getEnv("DEFAULT_NAMESPACE", "default")
 	defaultAppName   = getEnv("DEFAULT_APPNAME", "default")
+	defaultTTL       = getEnvInt("DEFAULT_TTL_SECONDS", 0) // 0 means no expiration
 	maxNamespaceLen  = getEnvInt("MAX_NAMESPACE_LEN", 25)
 	maxAppNameLen    = getEnvInt("MAX_APPNAME_LEN", 25)
 	maxKeyLen        = getEnvInt("MAX_KEY_LEN", 100)
-	maxValueSize     = getEnvInt("MAX_VALUE_SIZE", 1*1024*1024) // 1 MB
+	maxValueSize     = getEnvInt("MAX_VALUE_SIZE", 1*1024*1024)   // 1 MB
+	maxTTLSeconds    = getEnvInt("MAX_TTL_SECONDS", 365*24*60*60) // 1 year
 )
 
 func getEnv(key, fallback string) string {
@@ -68,7 +71,7 @@ func getPrefixedKey(c echo.Context, key string) (string, error) {
 	if len(key) > maxKeyLen {
 		return "", echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Key too long (max %d characters)", maxKeyLen))
 	}
-	return namespace + "/" + appName + "/" + key, nil
+	return "/" + baseKeyPrefix + "/" + namespace + "/" + appName + "/" + key, nil
 }
 
 // CreateKeyValue handles the creation of a new key-value pair.
@@ -82,6 +85,13 @@ func (h *Handler) CreateKeyValue(c echo.Context) error {
 	}
 	if len(kv.Value) > maxValueSize {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("Value too large (max %d bytes)", maxValueSize)})
+	}
+	if kv.TTL < 0 || kv.TTL > int64(maxTTLSeconds) {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("TTL must be between 0 and %d seconds", maxTTLSeconds)})
+	}
+	// If TTL is not set, use default TTL
+	if kv.TTL == 0 {
+		kv.TTL = int64(defaultTTL)
 	}
 	prefixedKey, err := getPrefixedKey(c, kv.Key)
 	if err != nil {
@@ -149,6 +159,13 @@ func (h *Handler) UpdateKeyValue(c echo.Context) error {
 	}
 	if len(kv.Value) > maxValueSize {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("Value too large (max %d bytes)", maxValueSize)})
+	}
+	if kv.TTL < 0 || kv.TTL > int64(maxTTLSeconds) {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("TTL must be between 0 and %d seconds", maxTTLSeconds)})
+	}
+	// If TTL is not set, use default TTL
+	if kv.TTL == 0 {
+		kv.TTL = int64(defaultTTL)
 	}
 	prefixedKey, err := getPrefixedKey(c, key)
 	if err != nil {
