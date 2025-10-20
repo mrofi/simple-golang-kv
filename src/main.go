@@ -2,9 +2,9 @@ package main
 
 import (
 	"log"
-	"os"
 
 	"github.com/labstack/echo/v4"
+	"github.com/mrofi/simple-golang-kv/src/config"
 	"github.com/mrofi/simple-golang-kv/src/handlers"
 	"github.com/mrofi/simple-golang-kv/src/routes"
 	"github.com/mrofi/simple-golang-kv/src/store"
@@ -12,17 +12,14 @@ import (
 
 func main() {
 	e := echo.New()
+	e.HideBanner = true
 
-	// etcd endpoints, can be set via env or hardcoded for local dev
-	endpoints := []string{"localhost:2379"}
-	if envEndpoints := os.Getenv("ETCD_ENDPOINTS"); envEndpoints != "" {
-		endpoints = []string{envEndpoints}
-	}
+	endpoints := config.AppConfig.ETCDEndpoints
 
 	// Read TLS certs from environment variables if provided
-	caFile := os.Getenv("ETCD_CA_FILE")
-	certFile := os.Getenv("ETCD_CERT_FILE")
-	keyFile := os.Getenv("ETCD_KEY_FILE")
+	caFile := config.AppConfig.ETCDCAFile
+	certFile := config.AppConfig.ETCDCertFile
+	keyFile := config.AppConfig.ETCDKeyFile
 
 	kvStore, err := store.NewStore(endpoints, caFile, certFile, keyFile)
 	if err != nil {
@@ -31,14 +28,9 @@ func main() {
 	defer kvStore.Close()
 
 	handler := &handlers.Handler{Store: kvStore}
-
 	routes.SetupRoutes(e, handler)
 
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
-	}
-
+	port := config.AppConfig.Port
 	log.Printf("Starting server on :%s\n", port)
 	if err := e.Start(":" + port); err != nil {
 		log.Fatal("Error starting server: ", err)

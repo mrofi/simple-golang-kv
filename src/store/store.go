@@ -8,12 +8,19 @@ import (
 	"os"
 	"time"
 
+	"go.etcd.io/etcd/api/v3/mvccpb"
 	clientv3 "go.etcd.io/etcd/client/v3"
 )
 
 // Store represents a key-value store backed by etcd.
 type Store struct {
 	client *clientv3.Client
+}
+
+type KVItem struct {
+	Key   string
+	Value string
+	TTL   *int64 // in seconds
 }
 
 // NewStore creates a new instance of Store connected to etcd with optional TLS.
@@ -56,8 +63,8 @@ func NewStore(endpoints []string, caFile, certFile, keyFile string) (*Store, err
 	return &Store{client: cli}, nil
 }
 
-// SetWithTTL adds or updates a key-value pair in etcd with optional TTL (in seconds).
-func (s *Store) SetWithTTL(key string, value string, ttl int64) error {
+// Set adds or updates a key-value pair in etcd with optional TTL (in seconds).
+func (s *Store) Set(key string, value string, ttl int64) error {
 	ctx := context.Background()
 	if ttl > 0 {
 		lease, err := s.client.Grant(ctx, ttl)
@@ -71,37 +78,14 @@ func (s *Store) SetWithTTL(key string, value string, ttl int64) error {
 	return err
 }
 
-// Set adds or updates a key-value pair in etcd (no TTL).
-func (s *Store) Set(key string, value string) error {
-	return s.SetWithTTL(key, value, 0)
-}
-
-// Get retrieves the value for a given key from etcd.
-func (s *Store) Get(key string) (string, bool, error) {
-	resp, err := s.client.Get(context.Background(), key)
-	if err != nil || len(resp.Kvs) == 0 {
-		return "", false, err
-	}
-	return string(resp.Kvs[0].Value), true, nil
-}
-
 // Get retrieves the value for a given key from etcd and returns its lease ID and TTL if set.
-func (s *Store) GetWithTTL(key string) (value string, found bool, ttl *int64, err error) {
+func (s *Store) Get(key string) (kvItem *KVItem, found bool, err error) {
 	resp, err := s.client.Get(context.Background(), key)
 	if err != nil || len(resp.Kvs) == 0 {
-		return "", false, nil, err
+		return nil, false, err
 	}
-	kv := resp.Kvs[0]
-	value = string(kv.Value)
-	if kv.Lease == 0 {
-		return value, true, nil, nil
-	}
-	// Query lease TTL
-	leaseResp, err := s.client.TimeToLive(context.Background(), clientv3.LeaseID(kv.Lease))
-	if err != nil {
-		return value, true, nil, nil // Return value even if TTL lookup fails
-	}
-	return value, true, &leaseResp.TTL, nil
+	kv := s.formatKVKey(resp.Kvs[0])
+	return kv, true, nil
 }
 
 // Delete removes a key-value pair from etcd.
@@ -111,14 +95,15 @@ func (s *Store) Delete(key string) error {
 }
 
 // All returns all key-value pairs in etcd (under a prefix).
-func (s *Store) All(prefix string) (map[string]string, error) {
+func (s *Store) All(prefix string) ([]*KVItem, error) {
 	resp, err := s.client.Get(context.Background(), prefix, clientv3.WithPrefix())
 	if err != nil {
 		return nil, err
 	}
-	result := make(map[string]string)
+	var result []*KVItem
 	for _, kv := range resp.Kvs {
-		result[string(kv.Key)] = string(kv.Value)
+		kvItem := s.formatKVKey(kv)
+		result = append(result, kvItem)
 	}
 	return result, nil
 }
@@ -126,4 +111,22 @@ func (s *Store) All(prefix string) (map[string]string, error) {
 // Close closes the etcd client connection.
 func (s *Store) Close() error {
 	return s.client.Close()
+}
+
+// Formatting the KV
+func (s *Store) formatKVKey(kv *mvccpb.KeyValue) *KVItem {
+	formatted := &KVItem{
+		Key:   string(kv.Key),
+		Value: string(kv.Value),
+	}
+	if kv.Lease == 0 {
+		return formatted
+	}
+	// Query lease TTL
+	leaseResp, err := s.client.TimeToLive(context.Background(), clientv3.LeaseID(kv.Lease))
+	if err != nil {
+		return formatted // Return value even if TTL lookup fails
+	}
+	formatted.TTL = &leaseResp.TTL
+	return formatted
 }
