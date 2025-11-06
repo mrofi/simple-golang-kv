@@ -5,10 +5,19 @@ import (
 	"github.com/mrofi/simple-golang-kv/src/handlers"
 )
 
+const routeKVWithKey = "/kv/:key"
+const routeWebhookWithID = "/webhooks/:id"
+
 // SetupRoutes registers the key-value handlers with the Echo instance.
 func SetupRoutes(e *echo.Echo, h *handlers.Handler) {
 	e.POST("/kv", h.CreateKeyValue)
-	e.GET("/kv/:key", h.GetKeyValue)
-	e.PUT("/kv/:key", h.UpdateKeyValue)
-	e.DELETE("/kv/:key", h.DeleteKeyValue)
+	e.GET(routeKVWithKey, h.GetKeyValue)
+	e.PUT(routeKVWithKey, h.UpdateKeyValue)
+	e.DELETE(routeKVWithKey, h.DeleteKeyValue)
+
+	// Webhook routes
+	e.POST("/webhooks", h.RegisterWebhook)
+	e.GET(routeWebhookWithID, h.GetWebhook)
+	e.PUT(routeWebhookWithID, h.UpdateWebhook)
+	e.DELETE(routeWebhookWithID, h.DeleteWebhook)
 }

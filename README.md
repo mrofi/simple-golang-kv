@@ -7,6 +7,9 @@ A simple key-value store API built with Go, Echo, and etcd.
 - RESTful API for key-value operations
 - Namespace and app name isolation via headers
 - TTL (time-to-live) support for expiring keys
+- **Webhook support** - Register webhooks to be triggered on key events (create, update, delete)
+- **Automatic webhook triggering** - Background watcher automatically triggers webhooks when events occur
+- **High availability** - Automatic failover: if the watcher pod crashes, another pod takes over
 - etcd as backend storage
 - Docker support
 - Configurable port and etcd connection via environment variables
@@ -107,6 +110,118 @@ Headers:
   KV-Namespace: myns
   KV-App-Name: myapp
 ```
+
+### Webhooks
+
+Webhooks allow you to receive notifications when key-value operations occur. You can register webhooks that trigger on specific events (create, update, delete) for keys or key patterns.
+
+#### Register Webhook
+
+```http
+POST /webhooks
+Headers:
+  KV-Namespace: myns
+  KV-App-Name: myapp
+Body:
+{
+  "key": "foo*",        // Key pattern (use * suffix for prefix matching)
+  "event": "create",    // Event type: create, update, or delete
+  "endpoint": "https://example.com/webhook",
+  "headers": {          // Optional custom headers
+    "Authorization": "Bearer token123"
+  },
+  "payload": {          // Optional custom payload fields
+    "source": "kv-store"
+  }
+}
+Response:
+{
+  "id": "550e8400-e29b-41d4-a716-446655440000"
+}
+```
+
+#### Get Webhook
+
+```http
+GET /webhooks/{id}
+Headers:
+  KV-Namespace: myns
+  KV-App-Name: myapp
+Response:
+{
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "key": "foo*",
+  "event": "create",
+  "endpoint": "https://example.com/webhook",
+  "headers": {
+    "Authorization": "Bearer token123"
+  },
+  "payload": {
+    "source": "kv-store"
+  },
+  "created_at": 1710000000
+}
+```
+
+#### Update Webhook
+
+```http
+PUT /webhooks/{id}
+Headers:
+  KV-Namespace: myns
+  KV-App-Name: myapp
+Body:
+{
+  "key": "bar*",        // Optional: update key pattern
+  "event": "update",    // Optional: update event type
+  "endpoint": "https://example.com/webhook2",  // Optional: update endpoint
+  "headers": {          // Optional: update headers
+    "X-Custom": "value"
+  },
+  "payload": {          // Optional: update payload
+    "updated": true
+  }
+}
+```
+
+#### Delete Webhook
+
+```http
+DELETE /webhooks/{id}
+Headers:
+  KV-Namespace: myns
+  KV-App-Name: myapp
+```
+
+#### Webhook Payload
+
+When a webhook is triggered, the following payload is sent to the registered endpoint:
+
+```json
+{
+  "event": "create",           // Event type: create, update, or delete
+  "key": "/kvstore/kv/myns/myapp/foo",  // Full prefixed key
+  "value": "bar",              // Value (null for delete events)
+  "ttl": 60,                   // TTL in seconds (if applicable)
+  "timestamp": 1710000000,     // Unix timestamp
+  "source": "kv-store"         // Custom payload fields (if provided)
+}
+```
+
+#### Webhook Events
+
+- **create**: Triggered when a new key is created
+- **update**: Triggered when an existing key is updated
+- **delete**: Triggered when a key is deleted
+
+#### Key Patterns
+
+- **Exact match**: `"key": "foo"` - Matches only the exact key "foo"
+- **Prefix match**: `"key": "foo*"` - Matches all keys starting with "foo" (e.g., "foo", "foobar", "foo123")
+
+#### Watcher
+
+The system includes a background watcher that monitors all key-value changes and automatically triggers matching webhooks. Only one pod runs the watcher at a time (enforced by distributed lock). If the watcher pod crashes, the lock expires (TTL 10s) and another pod automatically takes over, ensuring high availability.
 
 ## Development
 

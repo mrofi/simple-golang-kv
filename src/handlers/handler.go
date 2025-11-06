@@ -6,30 +6,34 @@ import (
 	"github.com/mrofi/simple-golang-kv/src/store"
 )
 
-var (
-	headerNamespace = config.AppConfig.HeaderNamespace
-	headerAppName   = config.AppConfig.HeaderAppName
-)
-
 // Handler wraps the etcd-backed store.
 type Handler struct {
-	Store *store.Store
+	Config *config.Config
+	Store  *store.Store
+}
+
+func NewHandler(Store *store.Store) *Handler {
+	return NewHandlerWithConfig(Store, config.AppConfig)
+}
+
+func NewHandlerWithConfig(Store *store.Store, cfg *config.Config) *Handler {
+	return &Handler{Store: Store, Config: cfg}
 }
 
 // getNamespace retrieves the namespace from headers or defaults.
-func getNamespace(c echo.Context) string {
-	namespace := c.Request().Header.Get(headerNamespace)
+func (h *Handler) getNamespace(c echo.Context) string {
+	namespace := c.Request().Header.Get(h.Config.HeaderNamespace)
 	if namespace == "" {
-		namespace = defaultNamespace
+		namespace = h.Config.DefaultNamespace
 	}
 	return namespace
 }
 
 // getAppName retrieves the app name from headers or defaults.
-func getAppName(c echo.Context) string {
-	appName := c.Request().Header.Get(headerAppName)
+func (h *Handler) getAppName(c echo.Context) string {
+	appName := c.Request().Header.Get(h.Config.HeaderAppName)
 	if appName == "" {
-		appName = defaultAppName
+		appName = h.Config.DefaultAppName
 	}
 	return appName
 }
