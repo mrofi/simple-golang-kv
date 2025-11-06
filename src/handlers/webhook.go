@@ -383,6 +383,7 @@ func (h *Handler) sendWebhook(webhook Webhook, key string, kvItem *store.KVItem)
 
 	// Set headers
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", "mrofi/simple-golang-kv")
 	if webhook.Headers != nil {
 		for k, v := range webhook.Headers {
 			req.Header.Set(k, v)
