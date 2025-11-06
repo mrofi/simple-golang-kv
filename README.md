@@ -124,16 +124,17 @@ Headers:
   KV-App-Name: myapp
 Body:
 {
-  "key": "foo*",        // Key pattern (use * suffix for prefix matching)
-  "event": "create",    // Event type: create, update, or delete
+  "key": "foo*",              // Key pattern (use * suffix for prefix matching)
+  "event": "create",          // Event type: create, update, or delete
   "endpoint": "https://example.com/webhook",
-  "method": "POST,      // Optional, default is POST
-  "headers": {          // Optional custom headers
+  "method": "POST",           // Optional, default is POST (valid: GET, POST, PUT, DELETE, PATCH, OPTIONS, HEAD)
+  "headers": {                // Optional custom headers
     "Authorization": "Bearer token123"
   },
-  "payload": {          // Optional custom payload fields
+  "payload": {                // Optional custom payload fields
     "source": "kv-store"
-  }
+  },
+  "add_event_data": true      // Optional, default false. If true, adds event data nested under "event" key
 }
 Response:
 {
@@ -151,6 +152,8 @@ Headers:
 Response:
 {
   "id": "550e8400-e29b-41d4-a716-446655440000",
+  "namespace": "myns",
+  "appName": "myapp",
   "key": "foo*",
   "event": "create",
   "endpoint": "https://example.com/webhook",
@@ -161,9 +164,35 @@ Response:
   "payload": {
     "source": "kv-store"
   },
+  "add_event_data": true,
   "created_at": 1710000000
 }
 ```
+
+#### Get Webhooks by Pattern
+
+You can retrieve multiple webhooks by appending `*` to a key pattern in the URL:
+
+```http
+GET /webhooks/{key-pattern}*
+Headers:
+  KV-Namespace: myns
+  KV-App-Name: myapp
+Response:
+[
+  {
+    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "namespace": "myns",
+    "appName": "myapp",
+    "key": "foo*",
+    "event": "create",
+    ...
+  },
+  ...
+]
+```
+
+Note: The pattern matches against webhook keys (not IDs). For example, `GET /webhooks/foo*` returns all webhooks whose key pattern matches "foo*".
 
 #### Update Webhook
 
@@ -174,16 +203,17 @@ Headers:
   KV-App-Name: myapp
 Body:
 {
-  "key": "bar*",        // Optional: update key pattern
-  "event": "update",    // Optional: update event type
+  "key": "bar*",                    // Optional: update key pattern
+  "event": "update",                // Optional: update event type
   "endpoint": "https://example.com/webhook2",  // Optional: update endpoint
-  "method": "GET"       // Optional: update method
-  "headers": {          // Optional: update headers
+  "method": "GET",                  // Optional: update method
+  "headers": {                      // Optional: update headers
     "X-Custom": "value"
   },
-  "payload": {          // Optional: update payload
+  "payload": {                      // Optional: update payload
     "updated": true
-  }
+  },
+  "add_event_data": false           // Optional: update add_event_data flag
 }
 ```
 
@@ -198,18 +228,44 @@ Headers:
 
 #### Webhook Payload
 
-When a webhook is triggered, the following payload is sent to the registered endpoint:
+When a webhook is triggered, the payload structure depends on the `add_event_data` setting:
+
+**If `add_event_data` is `false` (default):**
+Only your custom payload fields (if provided) are sent:
 
 ```json
 {
-  "event": "create",           // Event type: create, update, or delete
-  "key": "/kvstore/kv/myns/myapp/foo",  // Full prefixed key
-  "value": "bar",              // Value (null for delete events)
-  "ttl": 60,                   // TTL in seconds (if applicable)
-  "timestamp": 1710000000,     // Unix timestamp
-  "source": "kv-store"         // Custom payload fields (if provided)
+  "source": "kv-store"  // Only custom payload fields
 }
 ```
+
+**If `add_event_data` is `true`:**
+Event data is nested under an "event" key along with custom payload fields:
+
+```json
+{
+  "source": "kv-store",  // Custom payload fields
+  "event": {
+    "event": "create",           // Event type: create, update, or delete
+    "namespace": "myns",         // Namespace
+    "appName": "myapp",          // App name
+    "key": "foo",                // Key (without prefix)
+    "value": "bar",              // Value (null for delete events)
+    "ttl": 60,                   // TTL in seconds (if applicable)
+    "expire_at": 1710000000,     // Expiration timestamp (if TTL set)
+    "timestamp": 1710000000      // Unix timestamp
+  }
+}
+```
+
+**Empty payload:**
+If no custom payload is provided and `add_event_data` is `false`, no payload data is sent.
+
+**Webhook Headers:**
+All webhook requests include the following headers:
+- `Content-Type: application/json`
+- `User-Agent: github.com/mrofi/simple-golang-kv`
+- Any custom headers specified in the webhook registration
 
 #### Webhook Events
 

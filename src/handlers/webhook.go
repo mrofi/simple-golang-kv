@@ -33,36 +33,39 @@ var defaultMethod = "POST"
 
 // WebhookRegistration represents a webhook registration request
 type WebhookRegistration struct {
-	Key      string                 `json:"key"`              // Key pattern (supports * suffix for prefix matching)
-	Event    string                 `json:"event"`            // create, update, or delete
-	Endpoint string                 `json:"endpoint"`         // URL where webhook should be sent
-	Method   string                 `json:"method,omitempty"` // HTTP method to use
-	Headers  map[string]string      `json:"headers,omitempty"`
-	Payload  map[string]interface{} `json:"payload,omitempty"`
+	Key          string                 `json:"key"`              // Key pattern (supports * suffix for prefix matching)
+	Event        string                 `json:"event"`            // create, update, or delete
+	Endpoint     string                 `json:"endpoint"`         // URL where webhook should be sent
+	Method       string                 `json:"method,omitempty"` // HTTP method to use
+	Headers      map[string]string      `json:"headers,omitempty"`
+	Payload      map[string]interface{} `json:"payload,omitempty"`
+	AddEventData bool                   `json:"add_event_data,omitempty"` // Add event data to the payload
 }
 
 // Webhook represents a stored webhook
 type Webhook struct {
-	ID        string                 `json:"id"`
-	Namespace string                 `json:"namespace"` // Namespace
-	AppName   string                 `json:"appName"`   // App name
-	Key       string                 `json:"key"`       // Key pattern
-	Event     string                 `json:"event"`     // Event type
-	Endpoint  string                 `json:"endpoint"`  // Webhook URL
-	Method    string                 `json:"method"`    // HTTP method to use
-	Headers   map[string]string      `json:"headers,omitempty"`
-	Payload   map[string]interface{} `json:"payload,omitempty"`
-	CreatedAt int64                  `json:"created_at"`
+	ID           string                 `json:"id"`
+	Namespace    string                 `json:"namespace"` // Namespace
+	AppName      string                 `json:"appName"`   // App name
+	Key          string                 `json:"key"`       // Key pattern
+	Event        string                 `json:"event"`     // Event type
+	Endpoint     string                 `json:"endpoint"`  // Webhook URL
+	Method       string                 `json:"method"`    // HTTP method to use
+	Headers      map[string]string      `json:"headers,omitempty"`
+	Payload      map[string]interface{} `json:"payload,omitempty"`
+	AddEventData bool                   `json:"add_event_data"` // Add event data to the payload
+	CreatedAt    int64                  `json:"created_at"`
 }
 
 // WebhookUpdate represents an update request for a webhook
 type WebhookUpdate struct {
-	Key      string                 `json:"key,omitempty"`
-	Event    string                 `json:"event,omitempty"`
-	Endpoint string                 `json:"endpoint,omitempty"`
-	Method   string                 `json:"method,omitempty"`
-	Headers  map[string]string      `json:"headers,omitempty"`
-	Payload  map[string]interface{} `json:"payload,omitempty"`
+	Key          string                 `json:"key,omitempty"`
+	Event        string                 `json:"event,omitempty"`
+	Endpoint     string                 `json:"endpoint,omitempty"`
+	Method       string                 `json:"method,omitempty"`
+	Headers      map[string]string      `json:"headers,omitempty"`
+	Payload      map[string]interface{} `json:"payload,omitempty"`
+	AddEventData bool                   `json:"add_event_data,omitempty"`
 }
 
 // getWebhookPrefix returns the prefix for webhook storage
@@ -115,16 +118,17 @@ func (h *Handler) RegisterWebhook(c echo.Context) error {
 
 	// Create webhook object
 	webhook := Webhook{
-		ID:        webhookID,
-		Namespace: h.getNamespace(c),
-		AppName:   h.getAppName(c),
-		Key:       reg.Key,
-		Event:     string(event),
-		Endpoint:  reg.Endpoint,
-		Method:    reg.Method,
-		Headers:   reg.Headers,
-		Payload:   reg.Payload,
-		CreatedAt: time.Now().Unix(),
+		ID:           webhookID,
+		Namespace:    h.getNamespace(c),
+		AppName:      h.getAppName(c),
+		Key:          reg.Key,
+		Event:        string(event),
+		Endpoint:     reg.Endpoint,
+		Method:       reg.Method,
+		Headers:      reg.Headers,
+		Payload:      reg.Payload,
+		AddEventData: reg.AddEventData,
+		CreatedAt:    time.Now().Unix(),
 	}
 
 	// Store webhook
@@ -215,7 +219,7 @@ func (h *Handler) UpdateWebhook(c echo.Context) error {
 	}
 
 	// Update fields if provided
-	if err := h.applyWebhookUpdates(c, &webhook, &update); err != nil {
+	if err := h.applyWebhookUpdates(&webhook, &update); err != nil {
 		return err
 	}
 
@@ -248,7 +252,7 @@ func (h *Handler) DeleteWebhook(c echo.Context) error {
 }
 
 // applyWebhookUpdates applies update fields to a webhook
-func (h *Handler) applyWebhookUpdates(c echo.Context, webhook *Webhook, update *WebhookUpdate) error {
+func (h *Handler) applyWebhookUpdates(webhook *Webhook, update *WebhookUpdate) error {
 	if update.Key != "" {
 		webhook.Key = update.Key
 	}
@@ -273,6 +277,9 @@ func (h *Handler) applyWebhookUpdates(c echo.Context, webhook *Webhook, update *
 	}
 	if update.Payload != nil {
 		webhook.Payload = update.Payload
+	}
+	if update.AddEventData != webhook.AddEventData {
+		webhook.AddEventData = update.AddEventData
 	}
 	return nil
 }
@@ -339,9 +346,8 @@ func (h *Handler) triggerWebhooksForKey(prefixedKey string, event WebhookEvent, 
 	}
 }
 
-// sendWebhook sends the webhook HTTP request
-func (h *Handler) sendWebhook(webhook Webhook, key string, kvItem *store.KVItem) {
-	// Build payload
+// buildWebhookPayload builds the webhook payload
+func (h *Handler) buildWebhookPayload(webhook Webhook, key string, kvItem *store.KVItem) ([]byte, error) {
 	payload := make(map[string]interface{})
 
 	// Add custom payload fields if provided
@@ -351,37 +357,51 @@ func (h *Handler) sendWebhook(webhook Webhook, key string, kvItem *store.KVItem)
 		}
 	}
 
-	// Add event data
-	payload["event"] = webhook.Event
-	payload["namespace"] = webhook.Namespace
-	payload["appName"] = webhook.AppName
-	payload["key"] = key
-	if kvItem != nil {
-		payload["value"] = kvItem.Value
-		if kvItem.TTL != nil {
-			payload["ttl"] = *kvItem.TTL
-			payload["expire_at"] = time.Now().Add(time.Duration(*kvItem.TTL) * time.Second).Unix()
-		}
-	} else {
-		payload["value"] = nil
+	if webhook.AddEventData {
+		eventData := h.buildEventData(webhook, key, kvItem)
+		payload["event"] = eventData
 	}
-	payload["timestamp"] = time.Now().Unix()
 
-	// Marshal payload to JSON
+	if len(payload) == 0 {
+		return []byte{}, nil
+	}
+
 	payloadJSON, err := json.Marshal(payload)
 	if err != nil {
-		log.Printf("Error marshalling payload for key %s to %s: %v", key, webhook.Endpoint, err)
-		return // Silently fail
+		return nil, err
+	}
+	return payloadJSON, nil
+}
+
+// buildEventData builds the event data structure
+func (h *Handler) buildEventData(webhook Webhook, key string, kvItem *store.KVItem) map[string]interface{} {
+	eventData := make(map[string]interface{})
+	eventData["event"] = webhook.Event
+	eventData["namespace"] = webhook.Namespace
+	eventData["appName"] = webhook.AppName
+	eventData["key"] = key
+	eventData["timestamp"] = time.Now().Unix()
+
+	if kvItem != nil {
+		eventData["value"] = kvItem.Value
+		if kvItem.TTL != nil {
+			eventData["ttl"] = *kvItem.TTL
+			eventData["expire_at"] = time.Now().Add(time.Duration(*kvItem.TTL) * time.Second).Unix()
+		}
+	} else {
+		eventData["value"] = nil
 	}
 
-	// Create HTTP request
+	return eventData
+}
+
+// sendHTTPRequest sends the HTTP request for a webhook
+func (h *Handler) sendHTTPRequest(webhook Webhook, payloadJSON []byte) error {
 	req, err := http.NewRequest(webhook.Method, webhook.Endpoint, bytes.NewBuffer(payloadJSON))
 	if err != nil {
-		log.Printf("Error creating HTTP request for key %s to %s: %v", key, webhook.Endpoint, err)
-		return // Silently fail
+		return err
 	}
 
-	// Set headers
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", "github.com/mrofi/simple-golang-kv")
 	if webhook.Headers != nil {
@@ -390,14 +410,27 @@ func (h *Handler) sendWebhook(webhook Webhook, key string, kvItem *store.KVItem)
 		}
 	}
 
-	// Send request with timeout
 	client := &http.Client{
 		Timeout: 10 * time.Second,
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		log.Printf("Error sending webhook for key %s to %s: %v", key, webhook.Endpoint, err)
-		return // Silently fail
+		return err
 	}
 	defer resp.Body.Close()
+	return nil
+}
+
+// sendWebhook sends the webhook HTTP request
+func (h *Handler) sendWebhook(webhook Webhook, key string, kvItem *store.KVItem) {
+	payloadJSON, err := h.buildWebhookPayload(webhook, key, kvItem)
+	if err != nil {
+		log.Printf("Error building payload for key %s to %s: %v", key, webhook.Endpoint, err)
+		return
+	}
+
+	if err := h.sendHTTPRequest(webhook, payloadJSON); err != nil {
+		log.Printf("Error sending webhook for key %s to %s: %v", key, webhook.Endpoint, err)
+		return
+	}
 }
