@@ -127,6 +127,7 @@ Body:
   "key": "foo*",        // Key pattern (use * suffix for prefix matching)
   "event": "create",    // Event type: create, update, or delete
   "endpoint": "https://example.com/webhook",
+  "method": "POST,      // Optional, default is POST
   "headers": {          // Optional custom headers
     "Authorization": "Bearer token123"
   },
@@ -153,6 +154,7 @@ Response:
   "key": "foo*",
   "event": "create",
   "endpoint": "https://example.com/webhook",
+  "method": "POST",
   "headers": {
     "Authorization": "Bearer token123"
   },
@@ -175,6 +177,7 @@ Body:
   "key": "bar*",        // Optional: update key pattern
   "event": "update",    // Optional: update event type
   "endpoint": "https://example.com/webhook2",  // Optional: update endpoint
+  "method": "GET"       // Optional: update method
   "headers": {          // Optional: update headers
     "X-Custom": "value"
   },
