@@ -13,17 +13,19 @@ type Config struct {
 	ETCDCertFile  string
 	ETCDKeyFile   string
 
-	BaseKeyPrefix    string
-	HeaderNamespace  string
-	HeaderAppName    string
-	DefaultNamespace string
-	DefaultAppName   string
-	DefaultTTL       int
-	MaxNamespaceLen  int
-	MaxAppNameLen    int
-	MaxKeyLen        int
-	MaxValueSize     int
-	MaxTTLSeconds    int
+	BaseKeyPrefix         string
+	HeaderNamespace       string
+	HeaderAppName         string
+	DefaultNamespace      string
+	DefaultAppName        string
+	DefaultTTL            int
+	DefaultWebhookTimeout int
+	MaxNamespaceLen       int
+	MaxAppNameLen         int
+	MaxKeyLen             int
+	MaxValueSize          int
+	MaxTTLSeconds         int
+	MaxWebhooksAllowed    int
 }
 
 func NewConfig() *Config {
@@ -35,17 +37,19 @@ func NewConfig() *Config {
 		ETCDCertFile:  getEnv("ETCD_CERT_FILE", ""),
 		ETCDKeyFile:   getEnv("ETCD_KEY_FILE", ""),
 
-		BaseKeyPrefix:    getEnv("BASE_KEY_PREFIX", "kvstore"),
-		HeaderNamespace:  getEnv("HEADER_NAMESPACE", "KV-Namespace"),
-		HeaderAppName:    getEnv("HEADER_APPNAME", "KV-App-Name"),
-		DefaultNamespace: getEnv("DEFAULT_NAMESPACE", "default"),
-		DefaultAppName:   getEnv("DEFAULT_APPNAME", "default"),
-		DefaultTTL:       getEnvInt("DEFAULT_TTL_SECONDS", 0), // 0 means no expiration
-		MaxNamespaceLen:  getEnvInt("MAX_NAMESPACE_LEN", 25),
-		MaxAppNameLen:    getEnvInt("MAX_APPNAME_LEN", 25),
-		MaxKeyLen:        getEnvInt("MAX_KEY_LEN", 100),
-		MaxValueSize:     getEnvInt("MAX_VALUE_SIZE", 1*1024*1024),   // 1 MB
-		MaxTTLSeconds:    getEnvInt("MAX_TTL_SECONDS", 365*24*60*60), // 1 year
+		BaseKeyPrefix:         getEnv("BASE_KEY_PREFIX", "kvstore"),
+		HeaderNamespace:       getEnv("HEADER_NAMESPACE", "KV-Namespace"),
+		HeaderAppName:         getEnv("HEADER_APPNAME", "KV-App-Name"),
+		DefaultNamespace:      getEnv("DEFAULT_NAMESPACE", "default"),
+		DefaultAppName:        getEnv("DEFAULT_APPNAME", "default"),
+		DefaultTTL:            getEnvInt("DEFAULT_TTL_SECONDS", 0), // 0 means no expiration
+		DefaultWebhookTimeout: getEnvInt("DEFAULT_WEBHOOK_TIMEOUT_SECONDS", 10),
+		MaxNamespaceLen:       getEnvInt("MAX_NAMESPACE_LEN", 25),
+		MaxAppNameLen:         getEnvInt("MAX_APPNAME_LEN", 50),
+		MaxKeyLen:             getEnvInt("MAX_KEY_LEN", 100),
+		MaxValueSize:          getEnvInt("MAX_VALUE_SIZE", 1*1024*1024),   // 1 MB
+		MaxTTLSeconds:         getEnvInt("MAX_TTL_SECONDS", 365*24*60*60), // 1 year
+		MaxWebhooksAllowed:    getEnvInt("MAX_WEBHOOKS_ALLOWED", 5),
 	}
 }
 

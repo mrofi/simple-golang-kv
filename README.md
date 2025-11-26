@@ -7,14 +7,15 @@ A simple key-value store API built with Go, Echo, and etcd.
 - RESTful API for key-value operations
 - Namespace and app name isolation via headers
 - TTL (time-to-live) support for expiring keys
-- **Webhook support** - Register webhooks to be triggered on key events (create, update, delete)
-- **Automatic webhook triggering** - Background watcher automatically triggers webhooks when events occur
-- **High availability** - Automatic failover: if the watcher pod crashes, another pod takes over
+- Webhook support — register webhooks to be triggered on key events (create, update, delete)
+- Automatic webhook triggering — background watcher automatically triggers webhooks when events occur
+- High availability — watcher leadership is managed with a distributed lock
 - etcd as backend storage
 - Docker support
 - Configurable port and etcd connection via environment variables
 - Value size limit (default: 1MB, configurable)
 - Namespace, app name, and key length limits (configurable via env)
+- Max number of webhooks per namespace/app (configurable)
 
 ## Usage
 
@@ -38,22 +39,45 @@ docker run -p 8080:8080 \
   simple-golang-kv
 ```
 
-### Environment Variables
 
-- `ETCD_ENDPOINTS` — etcd endpoints (default: `localhost:2379`)
-- `ETCD_CA_FILE` — CA certificate file (optional)
-- `ETCD_CERT_FILE` — client certificate file (optional)
-- `ETCD_KEY_FILE` — client key file (optional)
-- `PORT` — HTTP port (default: `8080`)
-- `BASE_KEY_PREFIX` — base key prefix (default: `kvstore`)
-- `DEFAULT_NAMESPACE` — default namespace (default: `default`)
-- `DEFAULT_APPNAME` — default app name (default: `default`)
-- `DEFAULT_TTL_SECONDS` — default ttl in seconds (default: `0` means no expiration)
-- `MAX_NAMESPACE_LEN` — max namespace length (default: `25`)
-- `MAX_APPNAME_LEN` — max app name length (default: `25`)
-- `MAX_KEY_LEN` — max key length (default: `100`)
-- `MAX_VALUE_SIZE` — max value size in bytes (default: `1048576` for 1MB)
-- `MAX_TTL_SECONDS` — max ttl in seconds (default: `31536000` for 1 year)
+### Environment Variables (as defined in src/config/config.go)
+
+- PORT — HTTP port (default: 8080)
+- ETCD_ENDPOINTS — etcd endpoints, comma-separated (default: localhost:2379)
+- ETCD_CA_FILE — CA certificate file for etcd TLS (optional)
+- ETCD_CERT_FILE — client certificate file for etcd TLS (optional)
+- ETCD_KEY_FILE — client key file for etcd TLS (optional)
+- BASE_KEY_PREFIX — base key prefix stored in etcd (default: kvstore)
+- HEADER_NAMESPACE — HTTP header name for namespace (default: KV-Namespace)
+- HEADER_APPNAME — HTTP header name for app name (default: KV-App-Name)
+- DEFAULT_NAMESPACE — default namespace when header not provided (default: default)
+- DEFAULT_APPNAME — default app name when header not provided (default: default)
+- DEFAULT_TTL_SECONDS — default TTL in seconds for keys (default: 0 — no expiration)
+- DEFAULT_WEBHOOK_TIMEOUT_SECONDS — default per-webhook request timeout in seconds (default: 10)
+- MAX_NAMESPACE_LEN — max namespace length (default: 25)
+- MAX_APPNAME_LEN — max app name length (default: 50)
+- MAX_KEY_LEN — max key length (default: 100)
+- MAX_VALUE_SIZE — max value size in bytes (default: 1048576, i.e. 1 MB)
+- MAX_TTL_SECONDS — max ttl in seconds (default: 31536000, i.e. 1 year)
+- MAX_WEBHOOKS_ALLOWED — max number of webhooks allowed per namespace/app (default: 5)
+
+Notes:
+- ETCD_ENDPOINTS accepts a single endpoint or a comma-separated list.
+- HEADER_NAMESPACE and HEADER_APPNAME control the HTTP header names used by clients to specify namespace and app name.
+- DEFAULT_* and MAX_* variables enforce defaults and limits used by the API and watcher.
+
+### API (summary)
+
+- POST /kv — set key (body: key, value, optional ttl)
+- GET /kv/{key} — get key
+- PUT /kv/{key} — update key
+- DELETE /kv/{key} — delete key
+
+- POST /webhooks — register webhook (key pattern, event, endpoint, method, headers, payload, add_event_data)
+- GET /webhooks/{id} — get webhook by id
+- GET /webhooks/{key-pattern}* — get webhooks by key pattern
+- PUT /webhooks/{id} — update webhook
+- DELETE /webhooks/{id} — delete webhook
 
 ### API
 

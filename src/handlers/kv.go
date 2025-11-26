@@ -32,15 +32,7 @@ func (h *Handler) getKVPrefix(namespace, appName string) string {
 func (h *Handler) getKVPrefixedKey(c echo.Context, key string) (string, error) {
 	namespace := h.getNamespace(c)
 	appName := h.getAppName(c)
-	if len(namespace) > h.Config.MaxNamespaceLen {
-		return "", echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Namespace too long (max %d characters)", h.Config.MaxNamespaceLen))
-	}
-	if len(appName) > h.Config.MaxAppNameLen {
-		return "", echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("App name too long (max %d characters)", h.Config.MaxAppNameLen))
-	}
-	if len(key) > h.Config.MaxKeyLen {
-		return "", echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Key too long (max %d characters)", h.Config.MaxKeyLen))
-	}
+
 	return h.getKVPrefix(namespace, appName) + key, nil
 }
 
@@ -57,12 +49,21 @@ func (h *Handler) getOriginalKVKey(c echo.Context, prefixedKey string) (string, 
 
 // CreateKeyValue handles the creation of a new key-value pair.
 func (h *Handler) CreateKeyValue(c echo.Context) error {
+	// validate namespace and app name
+	namespace := h.getNamespace(c)
+	appName := h.getAppName(c)
+	if err := h.validateNamespaceAppName(namespace, appName); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+	}
 	var kv KeyValue
 	if err := c.Bind(&kv); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid input"})
 	}
 	if kv.Key == "" {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": errKeyEmpty})
+	}
+	if len(kv.Key) > h.Config.MaxKeyLen {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("Key too long (max %d characters)", h.Config.MaxKeyLen)})
 	}
 	if len(kv.Value) > h.Config.MaxValueSize {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("Value too large (max %d bytes)", h.Config.MaxValueSize)})
@@ -79,6 +80,7 @@ func (h *Handler) CreateKeyValue(c echo.Context) error {
 		return err
 	}
 	if err := h.Store.Set(prefixedKey, kv.Value, kv.TTL); err != nil {
+		fmt.Println("Error storing key-value:", err)
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Could not create key-value pair"})
 	}
 	return c.JSON(http.StatusCreated, kv)

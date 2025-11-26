@@ -17,6 +17,7 @@ func SetupRoutes(e *echo.Echo, h *handlers.Handler) {
 
 	// Webhook routes
 	e.POST("/webhooks", h.RegisterWebhook)
+	e.GET("/webhooks", h.GetWebhook)
 	e.GET(routeWebhookWithID, h.GetWebhook)
 	e.PUT(routeWebhookWithID, h.UpdateWebhook)
 	e.DELETE(routeWebhookWithID, h.DeleteWebhook)

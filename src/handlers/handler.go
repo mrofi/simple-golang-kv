@@ -1,6 +1,9 @@
 package handlers
 
 import (
+	"fmt"
+	"strings"
+
 	"github.com/labstack/echo/v4"
 	"github.com/mrofi/simple-golang-kv/src/config"
 	"github.com/mrofi/simple-golang-kv/src/store"
@@ -11,6 +14,8 @@ type Handler struct {
 	Config *config.Config
 	Store  *store.Store
 }
+
+const allowedCharacters = "abcdefghijklmnopqrstuvwxyz0123456789-_."
 
 func NewHandler(Store *store.Store) *Handler {
 	return NewHandlerWithConfig(Store, config.AppConfig)
@@ -36,4 +41,44 @@ func (h *Handler) getAppName(c echo.Context) string {
 		appName = h.Config.DefaultAppName
 	}
 	return appName
+}
+
+func (h *Handler) validateNamespaceAppName(namespace, appName string) error {
+	if len(namespace) > h.Config.MaxNamespaceLen {
+		return fmt.Errorf("namespace too long (max %d characters)", h.Config.MaxNamespaceLen)
+	}
+	if len(appName) > h.Config.MaxAppNameLen {
+		return fmt.Errorf("app name too long (max %d characters)", h.Config.MaxAppNameLen)
+	}
+	if !isValidString(namespace, allowedCharacters) {
+		if isValidString(strings.ToLower(namespace), allowedCharacters) {
+			return fmt.Errorf("namespace must be lowercase")
+		}
+		return fmt.Errorf("namespace contains invalid characters")
+	}
+	if !isValidString(appName, allowedCharacters) {
+		if isValidString(strings.ToLower(appName), allowedCharacters) {
+			return fmt.Errorf("app name must be lowercase")
+		}
+		return fmt.Errorf("app name contains invalid characters")
+	}
+	return nil
+}
+
+func isValidString(s, allowedChars string) bool {
+	for _, char := range s {
+		if !containsRune(allowedChars, char) {
+			return false
+		}
+	}
+	return true
+}
+
+func containsRune(s string, r rune) bool {
+	for _, char := range s {
+		if char == r {
+			return true
+		}
+	}
+	return false
 }
